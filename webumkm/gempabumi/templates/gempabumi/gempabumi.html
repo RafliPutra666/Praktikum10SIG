@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gempa Terkini BMKG</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    html, body { height: 100%; margin: 0; font-family: Arial, sans-serif; }
+    header {
+      background: #0b4a8b; color: #fff; padding: 10px 16px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    header h1 { margin: 0; font-size: 18px; }
+    header small { opacity: .85; }
+    header button {
+      background: #fff; border: 0; border-radius: 4px;
+      padding: 6px 12px; cursor: pointer;
+    }
+    .wrap { display: flex; height: calc(100% - 56px); }
+    #list { width: 300px; overflow-y: auto; border-right: 1px solid #ddd; }
+    #map { flex: 1; }
+
+    .item { padding: 10px 12px; border-bottom: 1px solid #eee; cursor: pointer; }
+    .item:hover { background: #f0f6ff; }
+    .item .mag {
+      display: inline-block; color: #fff; font-weight: bold;
+      padding: 2px 8px; border-radius: 4px; margin-right: 6px;
+    }
+    .item .wil { font-weight: bold; font-size: 13px; }
+    .item .meta { font-size: 12px; color: #666; margin-top: 4px; }
+    .err { background: #fdecea; color: #b71c1c; padding: 12px; }
+
+    .legend {
+      background: #fff; padding: 10px; border-radius: 8px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.3); font-size: 12px; line-height: 1.6;
+    }
+    .legend i {
+      display: inline-block; width: 12px; height: 12px;
+      border-radius: 50%; margin-right: 6px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>{{ jumlah }} Gempa Terkini (M 5.0+)</h1>
+      <small>{{ jumlah }} gempa M 5.0+ terakhir · diperbarui {{ diperbarui }}</small>
+    </div>
+    <button onclick="location.reload()">Muat ulang</button>
+  </header>
+
+  <div class="wrap">
+    <div id="list">
+      {% if error %}<div class="err">{{ error }}</div>{% endif %}
+    </div>
+    <div id="map"></div>
+  </div>
+
+  {{ gempa|json_script:"gempa-data" }}
+
+  <script>
+    const data = JSON.parse(document.getElementById('gempa-data').textContent);
+
+    // Warna berdasarkan kedalaman (km)
+    function warna(km) {
+      if (km < 70)   return '#e53935'; // dangkal  - merah
+      if (km <= 300) return '#fb8c00'; // menengah - oranye
+      return '#43a047';                // dalam    - hijau
+    }
+    // Radius lingkaran berdasarkan magnitudo
+    const radius = mag => Math.max(5, (mag - 3) * 4);
+
+    const map = L.map('map').setView([-2.5, 118], 5);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | Data gempa: <a href="https://www.bmkg.go.id">BMKG</a>'
+    }).addTo(map);
+
+    L.control.scale({ metric: true, imperial: false }).addTo(map);
+
+    // Legenda
+    const legend = L.control({ position: 'bottomright' });
+    legend.onAdd = () => {
+      const div = L.DomUtil.create('div', 'legend');
+      div.innerHTML = `
+        <b>Kedalaman</b><br>
+        <i style="background:#e53935"></i>Dangkal (&lt; 70 km)<br>
+        <i style="background:#fb8c00"></i>Menengah (70–300 km)<br>
+        <i style="background:#43a047"></i>Dalam (&gt; 300 km)<br>
+        <small>Ukuran lingkaran = magnitudo</small>`;
+      return div;
+    };
+    legend.addTo(map);
+
+    // Marker + daftar
+    const list = document.getElementById('list');
+    const bounds = [];
+
+    data.forEach(g => {
+      const c = warna(g.kedalaman);
+
+      const marker = L.circleMarker([g.lat, g.lng], {
+        radius: radius(g.magnitude),
+        color: '#333', weight: 1, fillColor: c, fillOpacity: 0.8
+      }).addTo(map);
+
+      marker.bindPopup(`
+        <b>M ${g.magnitude.toFixed(1)}</b> — ${g.wilayah}<br>
+        ${g.tanggal}, ${g.jam}<br>
+        Kedalaman: ${g.kedalaman} km<br>
+        Koordinat: ${g.lat}, ${g.lng}`);
+
+      bounds.push([g.lat, g.lng]);
+
+      const item = document.createElement('div');
+      item.className = 'item';
+      item.innerHTML = `
+        <span class="mag" style="background:${c}">${g.magnitude.toFixed(1)}</span>
+        <span class="wil">${g.wilayah}</span>
+        <div class="meta">${g.tanggal} ${g.jam} · ${g.kedalaman} km</div>`;
+      item.addEventListener('click', () => {
+        map.setView([g.lat, g.lng], 8);
+        marker.openPopup();
+      });
+      list.appendChild(item);
+    });
+
+    if (bounds.length) map.fitBounds(bounds, { padding: [40, 40] });
+  </script>
+</body>
+</html>

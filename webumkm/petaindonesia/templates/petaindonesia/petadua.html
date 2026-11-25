@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Peta Jabodetabek</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    html, body { height: 100%; margin: 0; font-family: Arial, sans-serif; }
+    header {
+      background: #0b4a8b; color: #fff; padding: 12px 16px;
+      font-weight: bold; font-size: 18px;
+    }
+    #map { height: calc(100% - 46px); width: 100%; }
+
+    /* Panel pilih kota */
+    .panel {
+      background: #fff; padding: 10px; border-radius: 8px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.3); min-width: 150px;
+    }
+    .panel h4 { margin: 0 0 8px; font-size: 14px; }
+    .panel button {
+      display: block; width: 100%; margin-bottom: 4px; padding: 6px 8px;
+      text-align: left; border: 1px solid #ccc; background: #f7f7f7;
+      border-radius: 4px; cursor: pointer;
+    }
+    .panel button:hover { background: #e6f0fb; }
+  </style>
+</head>
+<body>
+  <header>Peta Jabodetabek: Jakarta, Bogor, Depok, Tangerang, Bekasi</header>
+  <div id="map"></div>
+
+  <script>
+    // Data kota [nama, latitude, longitude]
+    const kota = [
+      { nama: "Jakarta",   lat: -6.2088, lng: 106.8456 },
+      { nama: "Bogor",     lat: -6.5971, lng: 106.8060 },
+      { nama: "Depok",     lat: -6.4025, lng: 106.7942 },
+      { nama: "Tangerang", lat: -6.1783, lng: 106.6319 },
+      { nama: "Bekasi",    lat: -6.2383, lng: 106.9756 }
+    ];
+
+    // Peta + basemap
+    const map = L.map('map').setView([-6.35, 106.85], 10);
+
+    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    const satelit = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
+      attribution: 'Tiles &copy; Esri'
+    });
+
+    // Kontrol layer + skala
+    L.control.layers({ "OpenStreetMap": osm, "Satelit": satelit }).addTo(map);
+    L.control.scale({ metric: true, imperial: false }).addTo(map);
+
+    // Marker + label permanen
+    const markers = {};
+    kota.forEach(k => {
+      const m = L.marker([k.lat, k.lng]).addTo(map);
+      m.bindTooltip(k.nama, { permanent: true, direction: 'top', offset: [0, -20] });
+      m.bindPopup(`<b>${k.nama}</b><br>${k.lat}, ${k.lng}`);
+      markers[k.nama] = m;
+    });
+
+    // Panel "Pilih kota"
+    const panel = L.control({ position: 'topright' });
+    panel.onAdd = function () {
+      const div = L.DomUtil.create('div', 'panel');
+      let html = '<h4>Pilih kota</h4>';
+      kota.forEach(k => { html += `<button data-kota="${k.nama}">${k.nama}</button>`; });
+      html += '<button data-kota="__all__">Tampilkan semua</button>';
+      div.innerHTML = html;
+      L.DomEvent.disableClickPropagation(div);
+      return div;
+    };
+    panel.addTo(map);
+
+    document.querySelectorAll('.panel button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const nama = btn.dataset.kota;
+        if (nama === '__all__') {
+          map.fitBounds(L.featureGroup(Object.values(markers)).getBounds().pad(0.2));
+        } else {
+          map.setView(markers[nama].getLatLng(), 13);
+          markers[nama].openPopup();
+        }
+      });
+    });
+
+    // Tampilan awal: semua kota
+    map.fitBounds(L.featureGroup(Object.values(markers)).getBounds().pad(0.2));
+  </script>
+</body>
+</html>
